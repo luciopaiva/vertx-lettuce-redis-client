@@ -1,3 +1,7 @@
+package examples;
+
+import common.LettuceClient;
+import common.VertxRunner;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
