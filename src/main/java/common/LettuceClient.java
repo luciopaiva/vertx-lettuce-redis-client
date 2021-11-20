@@ -7,6 +7,7 @@ import io.lettuce.core.SocketOptions;
 import io.lettuce.core.TimeoutOptions;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
+import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.codec.ByteArrayCodec;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -54,6 +55,10 @@ public class LettuceClient {
 
     public RedisAsyncCommands<byte[], byte[]> commands() {
         return connection.async();
+    }
+
+    public RedisCommands<byte[], byte[]> syncCommands() {
+        return connection.sync();
     }
 
     /**
