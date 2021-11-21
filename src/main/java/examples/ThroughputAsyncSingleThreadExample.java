@@ -1,6 +1,9 @@
 package examples;
 
 import common.LettuceClient;
+import common.Metric;
+import common.MetricReporter;
+import io.lettuce.core.RedisCommandTimeoutException;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -13,6 +16,14 @@ public class ThroughputAsyncSingleThreadExample {
 
     @SuppressWarnings("InfiniteLoopStatement")
     public static void main(String ...args) {
+        MetricReporter reporter = new MetricReporter(1000);
+        Metric iterations = new Metric("iterations");
+        Metric timeouts = new Metric("timeouts");
+        Metric successes = new Metric("successes");
+        reporter.addMetric(iterations);
+        reporter.addMetric(timeouts);
+        reporter.addMetric(successes);
+
         logger.info("Starting...");
         int port = args.length > 0 ? Integer.parseInt(args[0]) : 6379;
         LettuceClient client = new LettuceClient("localhost", port);
@@ -21,18 +32,20 @@ public class ThroughputAsyncSingleThreadExample {
         byte[] key = strToBytes("foo");
         byte[] value = strToBytes("bar");
 
-        int iterationsPerSecond = 0;
-        long nextTimeReportMetrics = System.currentTimeMillis() + 1000;
-
         while (true) {
-            commands.set(key, value);
+            commands.set(key, value).whenComplete((result, t) -> {
+                if (t == null) {
+                    successes.increment();
+                } else {
+                    if (t instanceof RedisCommandTimeoutException) {
+                        timeouts.increment();
+                    } else {
+                        logger.warn(t.getClass().getName());
+                    }
+                }
+            });
 
-            iterationsPerSecond++;
-            if (nextTimeReportMetrics < System.currentTimeMillis()) {
-                logger.info("Iterations per second: " + iterationsPerSecond);
-                iterationsPerSecond = 0;
-                nextTimeReportMetrics = System.currentTimeMillis() + 1000;
-            }
+            iterations.increment();
         }
     }
 }

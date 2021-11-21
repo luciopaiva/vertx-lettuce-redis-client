@@ -100,7 +100,59 @@ On the Lettuce side, however, we were seeing a huge number of reported iteration
 21:26:19.907 [INFO] (main) examples.ThroughputAsyncSingleThreadExample: Iterations per second: 350194
 ```
 
-Open question: what happens with the 100k+ futures being created per second that are not turning into actual requests? Are they being enqueued somewhere inside Lettuce? Where? One hypothesis is that they are being enqueued and not served in time, thus timing out.
+Open question: what happens with the 100k+ futures being created per second that are not turning into actual requests? Are they being enqueued somewhere inside Lettuce? Where? One hypothesis is that they are being enqueued and not served in time, thus timing out. I changed the test a bit to include timeout/success metrics:
+
+```
+12:18:43.604 [INFO] (metrics) common.MetricReporter: iterations=6771 timeouts=0 successes=0
+12:18:44.609 [INFO] (metrics) common.MetricReporter: iterations=280364 timeouts=622 successes=4182
+12:18:45.695 [INFO] (metrics) common.MetricReporter: iterations=270132 timeouts=175778 successes=0
+12:18:46.706 [INFO] (metrics) common.MetricReporter: iterations=180262 timeouts=129343 successes=0
+12:18:47.968 [INFO] (metrics) common.MetricReporter: iterations=192554 timeouts=168117 successes=0
+12:18:49.587 [INFO] (metrics) common.MetricReporter: iterations=331703 timeouts=338685 successes=0
+12:18:50.588 [INFO] (metrics) common.MetricReporter: iterations=430459 timeouts=441939 successes=3706
+12:18:51.588 [INFO] (metrics) common.MetricReporter: iterations=76919 timeouts=150188 successes=0
+12:18:52.592 [INFO] (metrics) common.MetricReporter: iterations=423772 timeouts=349194 successes=0
+12:18:54.037 [INFO] (metrics) common.MetricReporter: iterations=175720 timeouts=268155 successes=0
+12:18:55.038 [INFO] (metrics) common.MetricReporter: iterations=417649 timeouts=339175 successes=12629
+12:18:56.039 [INFO] (metrics) common.MetricReporter: iterations=302516 timeouts=404125 successes=1130
+12:18:57.043 [INFO] (metrics) common.MetricReporter: iterations=242783 timeouts=303394 successes=0
+12:18:58.048 [INFO] (metrics) common.MetricReporter: iterations=203402 timeouts=227153 successes=15997
+12:18:59.050 [INFO] (metrics) common.MetricReporter: iterations=237229 timeouts=196403 successes=5615
+12:19:00.050 [INFO] (metrics) common.MetricReporter: iterations=210494 timeouts=237175 successes=0
+12:19:01.054 [INFO] (metrics) common.MetricReporter: iterations=296857 timeouts=210984 successes=0
+12:19:02.058 [INFO] (metrics) common.MetricReporter: iterations=286462 timeouts=297520 successes=0
+12:19:03.059 [INFO] (metrics) common.MetricReporter: iterations=255092 timeouts=286007 successes=0
+12:19:04.108 [INFO] (metrics) common.MetricReporter: iterations=238473 timeouts=245618 successes=0
+12:19:05.108 [INFO] (metrics) common.MetricReporter: iterations=233009 timeouts=247258 successes=0
+```
+
+```
+------- data ------ --------------------- load -------------------- - child -
+keys       mem      clients blocked requests            connections
+1          4.51M    5       0       6101089 (+64035)    36
+1          4.47M    5       0       6129899 (+28810)    36
+1          4.47M    5       0       6130490 (+591)      36
+1          4.47M    5       0       6141664 (+11174)    36
+1          4.47M    5       0       6182600 (+40936)    36
+1          4.51M    5       0       6187650 (+5050)     36
+1          4.47M    5       0       6236171 (+48521)    36
+1          4.47M    5       0       6255842 (+19671)    36
+1          4.51M    5       0       6303579 (+47737)    36
+1          4.51M    5       0       6353433 (+49854)    36
+1          4.53M    6       0       6392427 (+38994)    36
+1          4.53M    6       0       6440720 (+48293)    36
+1          4.53M    6       0       6485828 (+45108)    36
+1          4.53M    6       0       6527935 (+42107)    36
+1          4.47M    5       0       6563174 (+35239)    36
+1          4.47M    5       0       6620524 (+57350)    36
+1          4.47M    5       0       6671637 (+51113)    36
+1          4.47M    5       0       6725949 (+54312)    36
+1          4.51M    5       0       6777936 (+51987)    36
+1          4.51M    5       0       6830036 (+52100)    36
+1          4.51M    5       0       6884734 (+54698)    36
+```
+
+So many of the requests are ending in timeouts as expected, but now all of them. That are far more requests being created than timeouts+successes being reported.
 
 ## ThroughputAsyncSingleThreadExample2
 
