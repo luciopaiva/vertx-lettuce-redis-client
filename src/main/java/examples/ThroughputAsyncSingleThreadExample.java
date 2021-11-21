@@ -1,7 +1,7 @@
 package examples;
 
+import common.CountMetric;
 import common.LettuceClient;
-import common.Metric;
 import common.MetricReporter;
 import io.lettuce.core.RedisCommandTimeoutException;
 import io.lettuce.core.api.async.RedisAsyncCommands;
@@ -17,9 +17,9 @@ public class ThroughputAsyncSingleThreadExample {
     @SuppressWarnings("InfiniteLoopStatement")
     public static void main(String ...args) {
         MetricReporter reporter = new MetricReporter(1000);
-        Metric iterations = new Metric("iterations");
-        Metric timeouts = new Metric("timeouts");
-        Metric successes = new Metric("successes");
+        CountMetric iterations = new CountMetric("iterations");
+        CountMetric timeouts = new CountMetric("timeouts");
+        CountMetric successes = new CountMetric("successes");
         reporter.addMetric(iterations);
         reporter.addMetric(timeouts);
         reporter.addMetric(successes);

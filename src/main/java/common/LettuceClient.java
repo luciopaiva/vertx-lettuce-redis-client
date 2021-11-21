@@ -9,6 +9,7 @@ import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.codec.ByteArrayCodec;
+import io.lettuce.core.resource.ClientResources;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -26,13 +27,14 @@ public class LettuceClient {
     private static final Duration COMMAND_TIMEOUT = Duration.ofMillis(1000);
     private static final Duration SOCKET_TIMEOUT = Duration.ofMillis(1000);
 
+    private final RedisClient client;
     private final StatefulRedisConnection<byte[], byte[]> connection;
 
     public LettuceClient(String host, Integer port) {
         logger.info(String.format("Creating relay Redis client (host: %s, port: %d)", host, port));
 
         RedisURI uri = RedisURI.create(host, port);
-        RedisClient client = RedisClient.create(uri);
+        client = RedisClient.create(uri);
         client.setOptions(prepareClientOptions());
 
         connection = client.connect(new ByteArrayCodec());
@@ -83,5 +85,9 @@ public class LettuceClient {
         connection.setAutoFlushCommands(true);
 
         return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+    }
+
+    public ClientResources getResources() {
+        return client.getResources();
     }
 }
