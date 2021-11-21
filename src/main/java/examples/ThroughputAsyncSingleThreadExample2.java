@@ -3,6 +3,7 @@ package examples;
 import common.LettuceClient;
 import common.Metric;
 import common.MetricReporter;
+import io.lettuce.core.RedisCommandTimeoutException;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -35,8 +36,11 @@ public class ThroughputAsyncSingleThreadExample2 {
                 if (t == null) {
                     successes.increment();
                 } else {
-                    timeouts.increment();
-//                    logger.warn(e.getClass().getName());
+                    if (t instanceof RedisCommandTimeoutException) {
+                        timeouts.increment();
+                    } else {
+                        logger.warn(t.getClass().getName());
+                    }
                 }
 
                 try {
