@@ -85,7 +85,11 @@ keys       mem      clients blocked requests            connections
 1          4.45M    4       0       1414292 (+1)        15
 ```
 
-Notice how it was able to keep at least 20k requests per second during the few initial seconds, but then it enters an erratic state where the rate drops to zero periodically. On the Lettuce side, however, we were seeing a huge number of reported iterations per second:
+Notice how it was able to keep at least 20k requests per second during the few initial seconds, but then it enters an erratic state where the rate drops to zero periodically.
+
+A rate of 20k/s means about 50us per request. It got to 100k/s at some moments, so 10us at best.
+
+On the Lettuce side, however, we were seeing a huge number of reported iterations per second:
 
 ```
 21:26:14.483 [INFO] (main) examples.ThroughputAsyncSingleThreadExample: Iterations per second: 192948
@@ -96,7 +100,7 @@ Notice how it was able to keep at least 20k requests per second during the few i
 21:26:19.907 [INFO] (main) examples.ThroughputAsyncSingleThreadExample: Iterations per second: 350194
 ```
 
-What was happening is now open for investigation.
+Open question: what happens with the 100k+ futures being created per second that are not turning into actual requests? Are they being enqueued somewhere inside Lettuce? Where? One hypothesis is that they are being enqueued and not served in time, thus timing out.
 
 ## ThroughputAsyncSingleThreadExample2
 
@@ -112,3 +116,9 @@ So this test executes 10 commands one immediately after the other, but when the 
 ```
 
 All 10 commands were immediately sent to Redis (confirmed by checking the server with `--stat`), but when the first response arrived, the event loop was blocked for long enough so that the other 9 responses timed out, even though they had already arrived!
+
+So here I learned two things: 
+
+- do not run stuff in the Lettuce even loop
+- commands can time out even after their response have arrived
+
