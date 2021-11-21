@@ -97,3 +97,18 @@ Notice how it was able to keep at least 20k requests per second during the few i
 ```
 
 What was happening is now open for investigation.
+
+## ThroughputAsyncSingleThreadExample2
+
+This example explores something I found while reading [the docs](https://lettuce.io/core/snapshot/reference/#faq.timeout) with respect to `RedisCommandTimeoutException` exceptions. It says there that timeouts may be caused by tasks blocking the event loop. The event loop here is Netty's event loop, one of Lettuce's dependencies. Netty uses an nio event loop, which Lettuce uses to dispatch requests to Redis.
+
+I am interested in this because I've seen these timeouts in production, so I am suspecting that they were possibly being caused by tasks blocking the loop since the server was not under heavy stress when the timeouts happened.
+
+So this test executes 10 commands one immediately after the other, but when the responses arrive, each task is programmed to wait 1 second *inside the event loop*. This is what happens:
+
+```
+22:53:57.077 [INFO] (metrics) common.MetricReporter: iterations=10 timeouts=0 successes=0
+22:53:58.082 [INFO] (metrics) common.MetricReporter: iterations=0 timeouts=9 successes=1
+```
+
+All 10 commands were immediately sent to Redis (confirmed by checking the server with `--stat`), but when the first response arrived, the event loop was blocked for long enough so that the other 9 responses timed out, even though they had already arrived!
