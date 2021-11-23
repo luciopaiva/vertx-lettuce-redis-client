@@ -1,7 +1,7 @@
 
 # Vert.x Lettuce Redis client
 
-This is a simple project to demonstrate how one can create a working Lettuce Redis client backed by a Vert.x thread. It leverages Lettuce's async API to ensure a non-blocking execution.
+This is a simple project to demonstrate how one can create a working Lettuce Redis client backed by a Vert.x thread. It leverages Lettuce's async API to ensure a non-blocking execution. There are also concurrency experiments to understand how Lettuce can be a bottleneck in a multi-thread scenario.
 
 ## Setup
 
@@ -14,7 +14,7 @@ Spin up a local Redis server running on port 6379 and execute the intended examp
 
 ## But why Vert.x?
 
-No strong reason. We just need a timer mechanism and Vert.x provides one. See `VertxRunner` for more details.
+No strong reason. We just need a timer mechanism to schedule calls to Redis and Vert.x provides one. See `VertxRunner` for more details.
 
 ## Throughput test
 
@@ -22,7 +22,7 @@ To investigate what level of throughput can we achieve with Lettuce, I started a
 
 ### ThroughputSyncSingleThreadExample
 
-This initial test runs a single thread with Lettuce in synchronized mode. The next command is only executed after the current one is complete. This means waiting a complete round trip to the Redis server and back. This test kept a steady 5 or 6 iterations per second, meaning a round trip time of about 160ms.
+This initial test runs a single thread with Lettuce in sync mode. The next command is only executed after the current one is complete. This means waiting a complete round trip to the Redis server and back. This test kept a steady 5 or 6 iterations per second, meaning a round trip time of about 160ms.
 
 ### ThroughputAsyncSingleThreadExample
 
@@ -152,15 +152,33 @@ keys       mem      clients blocked requests            connections
 1          4.51M    5       0       6884734 (+54698)    36
 ```
 
-So many of the requests are ending in timeouts as expected, but now all of them. That are far more requests being created than timeouts+successes being reported.
+Many of the requests were ending in timeouts as expected, but are all of them either timing out or succeeding, or are they ending some other way? Are we leaking requests?
+
+To answer the question above, I changed the test once more. Now it sends as many requests as it can, but only for 10 seconds. While doing that, I am also tracking the total count of requests, how many succeeded, how many timed out and how many are still pending. This is what I got:
+
+```
+20:13:36.091 [INFO] (metrics) common.MetricReporter: iterations=8054 timeouts=0 successes=0 total-pending=8085
+20:13:37.095 [INFO] (metrics) common.MetricReporter: iterations=283368 timeouts=0 successes=26298 total-pending=265175
+20:13:38.098 [INFO] (metrics) common.MetricReporter: iterations=300597 timeouts=108868 successes=8221 total-pending=448734
+20:13:39.144 [INFO] (metrics) common.MetricReporter: iterations=145664 timeouts=94080 successes=201 total-pending=500096
+20:13:40.976 [INFO] (metrics) common.MetricReporter: iterations=306241 timeouts=268326 successes=4083 total-pending=533924
+20:13:42.762 [INFO] (metrics) common.MetricReporter: iterations=274316 timeouts=355601 successes=0 total-pending=452700
+20:13:43.767 [INFO] (metrics) common.MetricReporter: iterations=387058 timeouts=454932 successes=0 total-pending=384814
+20:13:45.098 [INFO] (metrics) common.MetricReporter: iterations=30267 timeouts=109998 successes=0 total-pending=305086
+20:13:46.101 [INFO] (metrics) common.MetricReporter: iterations=327705 timeouts=305087 successes=1830 total-pending=325874
+20:13:47.104 [INFO] (metrics) common.MetricReporter: iterations=0 timeouts=325874 successes=0 total-pending=0
+20:13:48.108 [INFO] (metrics) common.MetricReporter: iterations=0 timeouts=0 successes=0 total-pending=0
+```
+
+It shows that, in the end, after requests have ceased, we end up with zero pending requests, meaning all of them resolved one way or another. Also notice that the queue is unbounded because the client was built by passing `.requestQueueSize(Integer.MAX_VALUE)`. Setting this to a small value would mean the queue would eventually get full and new requests would be denied with a RedisException (see [docs section on client options](https://lettuce.io/core/release/reference/#client-options)). 
 
 ## ThroughputAsyncSingleThreadExample2
 
 This example explores something I found while reading [the docs](https://lettuce.io/core/snapshot/reference/#faq.timeout) with respect to `RedisCommandTimeoutException` exceptions. It says there that timeouts may be caused by tasks blocking the event loop. The event loop here is Netty's event loop, one of Lettuce's dependencies. Netty uses an nio event loop, which Lettuce uses to dispatch requests to Redis.
 
-I am interested in this because I've seen these timeouts in production, so I am suspecting that they were possibly being caused by tasks blocking the loop since the server was not under heavy stress when the timeouts happened.
+I am interested in this because I've seen these timeouts in production code on a project I've worked on, so I am suspecting that they were possibly being caused by tasks blocking the loop since the server was not under heavy stress when the timeouts happened and there was no other plausible explanation for the timeouts.
 
-So this test executes 10 commands one immediately after the other, but when the responses arrive, each task is programmed to wait 1 second *inside the event loop*. This is what happens:
+So this test executes 10 commands, one immediately after the other, but when the responses arrive, each task is programmed to wait 1 second *inside the event loop*. This is what happens:
 
 ```
 22:53:57.077 [INFO] (metrics) common.MetricReporter: iterations=10 timeouts=0 successes=0
@@ -171,6 +189,6 @@ All 10 commands were immediately sent to Redis (confirmed by checking the server
 
 So here I learned two things: 
 
-- do not run stuff in the Lettuce even loop
-- commands can time out even after their response have arrived
+- do not run stuff in the Lettuce event loop
+- commands can time out even after their response has arrived
 
