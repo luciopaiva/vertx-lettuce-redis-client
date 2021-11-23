@@ -8,16 +8,17 @@ import static util.ByteArrayUtils.strToBytes;
 
 public class ThrottleableClient {
 
-    private static AtomicInteger nextClientIndex = new AtomicInteger(0);
+    private static final AtomicInteger nextClientIndex = new AtomicInteger(0);
 
-    private final int maxPendingCommands;
+    private final int requestsPerSecond;
     private final Thread worker;
     private final LettuceClient client;
+    private final AtomicInteger pending = new AtomicInteger(0);
 
-    private AtomicInteger pending = new AtomicInteger(0);
+    private int lastExecutionTimeInMillis = 0;
 
-    public ThrottleableClient(String host, int port, int maxPendingCommands) {
-        this.maxPendingCommands = maxPendingCommands;
+    public ThrottleableClient(String host, int port, int requestsPerSecond) {
+        this.requestsPerSecond = requestsPerSecond;
 
         worker = new Thread(this::run, "throtteable-client-" + nextClientIndex.incrementAndGet());
         client = new LettuceClient(host, port);
@@ -32,18 +33,28 @@ public class ThrottleableClient {
         return pending;
     }
 
+    public int getLoad() {
+        return (int) (lastExecutionTimeInMillis / 10d);
+    }
+
     private void run() {
         RedisAsyncCommands<byte[], byte[]> commands = client.commands();
         byte[] key = strToBytes("foo");
         byte[] value = strToBytes("bar");
 
         while (true) {
-            while (pending.get() < maxPendingCommands) {
+            long startTime = System.currentTimeMillis();
+            long nextRoundStartTime = startTime + 1000;
+
+            for (int i = 0; i < requestsPerSecond; i++) {
                 commands.set(key, value).whenComplete((result, t) -> pending.decrementAndGet());
                 pending.incrementAndGet();
             }
 
-            Thread.yield();
+            lastExecutionTimeInMillis = (int) (System.currentTimeMillis() - startTime);
+            while (System.currentTimeMillis() < nextRoundStartTime) {
+                Thread.yield();
+            }
         }
     }
 }
