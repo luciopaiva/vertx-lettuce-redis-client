@@ -192,3 +192,6 @@ So here I learned two things:
 - do not run stuff in the Lettuce event loop
 - commands can time out even after their response has arrived
 
+## ThroughputAsyncSingleThreadExample3
+
+This test runs a client that keeps track of how many Redis commands were issued but not yet resolved. The intention of this test is to keep a steady number of pending commands at any given time, to see how far can a single thread go.
