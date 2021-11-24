@@ -14,18 +14,23 @@ public class ThrottleableClient {
     private final Thread worker;
     private final LettuceClient client;
     private final AtomicInteger pending = new AtomicInteger(0);
+    private final CountMetric failures;
 
     private int lastExecutionTimeInMillis = 0;
 
-    public ThrottleableClient(String host, int port, int requestsPerSecond) {
+    public ThrottleableClient(String host, int port, int requestsPerSecond, CountMetric failures) {
         this.requestsPerSecond = requestsPerSecond;
+        this.failures = failures;
 
         worker = new Thread(this::run, "throtteable-client-" + nextClientIndex.incrementAndGet());
         client = new LettuceClient(host, port);
     }
 
-    public void start() throws InterruptedException {
+    public void start() {
         worker.start();
+    }
+
+    public void join() throws InterruptedException {
         worker.join();
     }
 
@@ -47,7 +52,12 @@ public class ThrottleableClient {
             long nextRoundStartTime = startTime + 1000;
 
             for (int i = 0; i < requestsPerSecond; i++) {
-                commands.set(key, value).whenComplete((result, t) -> pending.decrementAndGet());
+                commands.set(key, value).whenComplete((result, t) -> {
+                    if (t != null && failures != null) {
+                        failures.increment();
+                    }
+                    pending.decrementAndGet();
+                });
                 pending.incrementAndGet();
             }
 

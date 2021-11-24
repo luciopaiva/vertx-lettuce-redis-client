@@ -195,3 +195,7 @@ So here I learned two things:
 ## ThroughputAsyncSingleThreadExample3
 
 This test runs a client that keeps a steady rate of requests to Redis.
+
+## ThroughputAsyncMultiThreadExample
+
+This test reuses `ThroughputAsyncSingleThreadExample3`, instancing multiple clients.
